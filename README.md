@@ -11,7 +11,7 @@ Raw small RNA-seq and mRNA-seq FASTA files were obtained on 6/09/2019 (Charlotte
 #### small RNA-seq
 There are 18 samples total, 3 replicates for each condition.
 
-<img src="smallRNAseq_Workflow.png" width="10">
+![small RNA-seq workflow](smallRNAseq_Workflow.png){: width="3px"}
 #### ChIP-seq
 
 #### mRNA-seq
