@@ -1,10 +1,5 @@
----
-title: <font size="6">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font>
-mainfont: Arial
-fontsize: 12pt
-output: html_document
----  
----  
+
+<font size="6">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font> 
 
 <font size="4">https://www.biorxiv.org/content/10.1101/2020.08.06.240200v1</font>
 
