@@ -1,6 +1,6 @@
 
-<font size="6">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font> 
-
+<font size="10">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font> 
+___
 <font size="4">https://www.biorxiv.org/content/10.1101/2020.08.06.240200v1</font>
 
 <font size="4">**Authors:** Charlotte P. Choi, Rebecca J. Tay, Margaret R. Starostik, Suhua Feng, James J. Moresco, Brooke E. Montgomery, Emily Xu, Maya A. Hammonds, Michael C. Schatz, Taiowa A. Montgomery, John R. Yates III, Steven E. Jacobsen, John K. Kim.</font>
@@ -18,7 +18,6 @@ The `scripts` directory contains code to run small RNA-seq and ChIP-seq analysis
 
 The `data` directory contains metadata tables.
 
-<br>
 <br>
 <br>
 <font size="4">**Resources**</font>  
