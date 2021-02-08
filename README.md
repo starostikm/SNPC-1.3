@@ -1,22 +1,32 @@
-## piRNA_SexBias
+---
+title: <font size="6">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font>
+mainfont: Arial
+fontsize: 12pt
+output: html_document
+---  
+---  
 
-## Author: Margaret R. Starostik
+<font size="4">https://www.biorxiv.org/content/10.1101/2020.08.06.240200v1</font>
 
-## Basic Overview
-Identify changes in the transcriptome and transcription factor binding profiles between N2 and snpc-1.3(-) during spermatogenesis and oogenesis. 
+<font size="4">**Authors:** Charlotte P. Choi, Rebecca J. Tay, Margaret R. Starostik, Suhua Feng, James J. Moresco, Brooke E. Montgomery, Emily Xu, Maya A. Hammonds, Michael C. Schatz, Taiowa A. Montgomery, John R. Yates III, Steven E. Jacobsen, John K. Kim.</font>
+<br>
+<br>
+<br>
+Piwi-interacting RNAs (piRNAs) play essential roles in silencing repetitive elements to promote fertility in metazoans. Studies in worms, flies, and mammals reveal that piRNAs are expressed in a sex-specific manner. However, the mechanisms underlying this sex-specific regulation are unknown. Here we identify SNPC-1.3, a male germline-enriched variant of a conserved subunit of the small nuclear RNA activating protein complex, as a male-specific piRNA transcription factor in C. elegans. SNPC-1.3 colocalizes with the core piRNA transcription factor, SNPC-4, in nuclear foci of the male germline. Binding of SNPC-1.3 at male piRNA loci drives spermatogenic piRNA transcription and requires SNPC-4. Loss of snpc-1.3 leads to depletion of male piRNAs and defects in male-dependent fertility. Furthermore, TRA-1, a master regulator of sex determination, binds to the snpc-1.3 promoter and represses its expression during oogenesis. Loss of TRA-1 targeting causes ectopic expression of snpc-1.3 and male piRNAs during oogenesis. Thus, sexually dimorphic regulation of snpc-1.3 expression coordinates male and female piRNA expression during germline development.
+<br>
+<br>
+<br>
+<font size="4">**Getting Started**</font>
 
-### Data Acquisition
-Raw small RNA-seq and mRNA-seq FASTA files were obtained on 6/09/2019 (Charlotte).
+___
+The `scripts` directory contains code to run small RNA-seq and ChIP-seq analysis to reproduce all results and figures.  
 
-#### small RNA-seq
-There are 18 samples total, 3 replicates for each condition.
-<describe how small RNA-seq libraries were made> 
-Adapter and quality trimming was performed on raw reads using Trimmomatic 0.39 ({ADAPTERS}:2:30:10 SLIDINGWINDOW:4:25). These trimmed reads were then aligned to the WBcel235 reference genome annotation using Bowtie 1.1.1, allowing for 1 mismatch (-v 1 -M -1 –best –strata --tryhard). SubRead 1.6.3 was used to construct a count matrix of reads. Differential expression analysis was performed with DESeq2. 
+The `data` directory contains metadata tables.
 
-<img src="smallRNAseq_Workflow.png" alt="Workflow" width="300"/>
+<br>
+<br>
+<br>
+<font size="4">**Resources**</font>  
 
-
-#### ChIP-seq
-
-#### mRNA-seq
-
+___
+Please refer to our publication for a detailed description of how these analyses were performed.
