@@ -1,5 +1,5 @@
 
-<font size="10">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font> 
+<font size="12">**Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"**</font> 
 ___
 <font size="4">https://www.biorxiv.org/content/10.1101/2020.08.06.240200v1</font>
 
@@ -12,7 +12,6 @@ Piwi-interacting RNAs (piRNAs) play essential roles in silencing repetitive elem
 <br>
 <br>
 <font size="4">**Getting Started**</font>
-
 ___
 The `scripts` directory contains code to run small RNA-seq and ChIP-seq analysis to reproduce all results and figures.  
 
@@ -20,7 +19,7 @@ The `data` directory contains metadata tables.
 
 <br>
 <br>
-<font size="4">**Resources**</font>  
 
+<font size="4">**Resources**</font>  
 ___
 Please refer to our publication for a detailed description of how these analyses were performed.
