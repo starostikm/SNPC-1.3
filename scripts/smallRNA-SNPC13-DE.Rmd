@@ -1,0 +1,260 @@
+---
+title: "small RNA-seq analysis: differential expression"
+author: "Margaret R. Starostik (mstaros1@jhu.edu)"
+date: "03/06/2020"
+header-includes:
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+output:
+  pdf_document:
+    latex_engine: xelatex
+    fig_caption: true
+mainfont: Helvetica
+fontsize: 11
+graphics: yes
+---
+
+
+*Goal: Perform differential expression.*
+```{r setup, include = FALSE}
+# list of packages
+PackageList <- c("DESeq2", "dplyr", "here", "kableExtra", "knitr", "readxl")
+
+# check and install missing packages
+## https://stackoverflow.com/questions/4090169/elegant-way-to-check-for-missing-packages-and-install-them
+install.packages.auto <- function(x) { 
+  if (isTRUE(x %in% .packages(all.available = TRUE))) { 
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  } else { 
+    #update.packages(ask= FALSE) #update installed packages.
+    eval(parse(text = sprintf("install.packages(\"%s\", dependencies = TRUE)", x)))
+  }
+  if(isTRUE(x %in% .packages(all.available = TRUE))) { 
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  } else {
+    if (!requireNamespace("BiocManager", quietly = TRUE))
+      install.packages("BiocManager")
+    eval(parse(text = sprintf("BiocManager::install(\"%s\")", x, update = FALSE)))
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  }
+}
+
+lapply(PackageList, function(x) {message(x); install.packages.auto(x)})
+
+# source scripts
+source(here("../../TOOLS/base_functions.R"))
+
+# change global default setting so every data frame created will not auto-convert to factors unless explicitly instructed
+options(stringsAsFactors = FALSE)
+
+# set global options that apply to every chunk in this file
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+
+In order to perform the analyses below, a gene expression matrix was constructed from quantified SubRead counts.
+Samples identified as outliers (i.e. SNPC13-48-R3, TBS-48-R1, TBS-48-R2, and TBS-48-R3) were removed from analysis.
+```{r CountsMatrix}
+# Read in the SubRead counts for each of the samples and construct a counts matrix.
+AnnotatedCounts <- read.table(here("smallRNA-SNPC13-SubReadRawCounts.txt"), header = TRUE)
+
+counts <- AnnotatedCounts %>% 
+  select( gene_ID,
+          `N2-48-R1` = smallRNA2018.001.N2.48hL4.WW,
+          `N2-48-R2` = smallRNA2018.002.N2.48hL4.WW,
+          `N2-48-R3` = smallRNA2018.003.N2.48hL4.WW ,
+          `SNPC13-48-R1` = smallRNA2018.004.SNPC1point3null.48hL4.WW, 
+          `SNPC13-48-R2` = smallRNA2018.005.SNPC1point3null.48hL4.WW,
+          `N2-72-R1` = smallRNA2018.010.N2.72hGRAVID.WW,
+          `N2-72-R2` = smallRNA2018.011.N2.72hGRAVID.WW,
+          `N2-72-R3` = smallRNA2018.012.N2.72hGRAVID.WW,
+          `TBS-72-R1` = smallRNA2018.016.SNPC1point3_2xTBS.72hGRAVID.WW,
+          `TBS-72-R2` = smallRNA2018.017.SNPC1point3_2xTBS.72hGRAVID.WW,
+          `TBS-72-R3` = smallRNA2018.018.SNPC1point3_2xTBS.72hGRAVID.WW) 
+
+rownames(counts) <- counts$gene_ID
+counts <- counts[, -1]
+```
+
+
+```{r Annotation}
+annotation <- read.table(here("../../TOOLS/References/WBcel235_Ensembl97.269/WBcel235_BioMart_GeneAnnotation_Addendum.txt"), header = TRUE)
+annotation <- annotation[annotation$gene_ID %in% rownames(counts), ]
+rownames(annotation) <- annotation$gene_ID
+annotation <- annotation[order(annotation$gene_ID), ] # order by gene_IDs
+```
+
+
+A separate gene filter was not applied to exclude lowly expressed genes prior to differential expression using DESeq2. It is not necessary to pre-filter because independent filtering occurs within results() to select a set of genes for multiple test correction which maximizes the number of adjusted p-values less than a given critical value alpha (by default 0.1). The filter used for maximizing the number of rejections is the mean of normalized counts for all samples in the dataset. 
+```{r DEPrep, message = FALSE, warning = FALSE}
+# Differential expression is directly done on chrIV piRNAs. Subset the annotation and counts matrix for chrIV piRNAs
+annotation <- filter(annotation, chromosome == "IV" & gene_type == "piRNA")
+counts <- counts[rownames(counts) %in% annotation$gene_ID, ]
+
+# read in metadata
+metadata <- read_xlsx(here("smallRNA-SNPC13-metadata.xlsx"))
+metadata <- as.data.frame(metadata)
+rownames(metadata) <- metadata$RID
+metadata <- metadata[, -1]
+
+# order all data by rownames and colnames so that DESeqDataSetFromMatrix object is properly ordered
+metadata <- metadata[rownames(metadata) %in% colnames(counts), ]
+metadata <- metadata[order(rownames(metadata)), ] # order by RIDs
+
+metadata$Genotype <- factor(metadata$genotype, levels = c("N2", "SNPC13_LOF", "SNPC13_2xTBS"))
+metadata$GenotypeAge <- paste0(metadata$genotype, "_", metadata$age)
+
+counts <- counts[order(rownames(counts)), ] # order by gene_IDs
+counts <- counts[, order(colnames(counts))] # order by RIDs
+
+# form DESeqDataSetFromMatrix object using sorted counts matrix, metadata information, and gene annotation
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = metadata,
+                              design = ~GenotypeAge)
+dds <- DESeq(dds)
+```
+
+
+```{r NormalizedCounts}
+NormalizedCounts <- counts(dds, normalized = TRUE)
+NormalizedCounts <- as.data.frame(NormalizedCounts)
+NormalizedCounts$gene_ID <- rownames(NormalizedCounts)
+
+AnnotatedNormCounts <- merge(annotation, NormalizedCounts, by.x = "gene_ID", by.y = "gene_ID")
+write.table(AnnotatedNormCounts, 
+            here("smallRNA-SNPC13-NormalizedSubReadCounts.txt"), 
+            quote = FALSE, 
+            row.names = FALSE, 
+            col.names = TRUE, 
+            sep = "\t")
+```
+
+
+*Differential expression: N2 48h versus N2 72h.*
+```{r N248_vs_N272, message = FALSE, warning = FALSE}
+# contrast for N2 72h vs N2 48h
+Contrast <- results(dds, 
+                    contrast = c("GenotypeAge", "N2_48", "N2_72"), 
+                    cooksCutoff = TRUE, 
+                    independentFiltering = FALSE)
+
+N248_vs_N272 <- as.data.frame(Contrast)
+N248_vs_N272$gene_ID <- rownames(N248_vs_N272)
+N248_vs_N272 <- merge(annotation, N248_vs_N272, by.x = "gene_ID", by.y = "gene_ID")
+N248_vs_N272$FC <- ifelse(N248_vs_N272$log2FoldChange < 0, 2^abs(N248_vs_N272$log2FoldChange) * -1, 2^N248_vs_N272$log2FoldChange)
+names(N248_vs_N272)[names(N248_vs_N272) == "padj"] <- "padj_BH"
+
+
+# write files
+## diagnostic plots
+pdf(here("smallRNA-SNPC13-N248_vs_N272-DESEq2-DiagnosticPlots.pdf"), height = 4, width = 5)
+
+ggplot(as.data.frame(Contrast$pvalue), aes(`Contrast$pvalue`)) + 
+  geom_histogram(binwidth = 0.05, center = 0.025) + 
+  scale_y_continuous(limits = c(0, 15000), expand = c(0, 0)) + 
+  scale_x_continuous(breaks = seq(0, 1, 0.25), limits = c(0.00, 1.00), expand = c(0, 0)) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(x = "P-value", y = "Count")
+
+MAPlot <- plotMA(Contrast, ylim = c(-1, 1))
+
+DispersionPlot <- plotDispEsts(dds, ylim = c(1e-6, 1e2))
+
+dev.off()
+
+## differential expression results
+write.table(N248_vs_N272, 
+            here("smallRNA-SNPC13-N248_vs_N272-DE.txt"), 
+            row.names = FALSE, 
+            quote = FALSE, 
+            sep = "\t")
+```
+
+
+*Differential expression: SNPC-1.3(-) 48h versus N2 48h.*
+```{r SNPC1348_vs_N248, message = FALSE, warning = FALSE}
+# contrast for SNPC-1.3(-) 48h vs N2 48h
+Contrast <- results(dds, contrast = c("GenotypeAge", "SNPC13_LOF_48", "N2_48"), cooksCutoff = TRUE, independentFiltering = FALSE)
+
+SNPC1348_vs_N248 <- as.data.frame(Contrast)
+SNPC1348_vs_N248$gene_ID <- rownames(SNPC1348_vs_N248)
+SNPC1348_vs_N248 <- merge(annotation, SNPC1348_vs_N248, by.x = "gene_ID", by.y = "gene_ID")
+SNPC1348_vs_N248$FC <- ifelse(SNPC1348_vs_N248$log2FoldChange < 0, 2^abs(SNPC1348_vs_N248$log2FoldChange) * -1, 2^SNPC1348_vs_N248$log2FoldChange)
+names(SNPC1348_vs_N248)[names(SNPC1348_vs_N248) == "padj"] <- "padj_BH"
+
+
+# write files
+## diagnostic plots
+pdf(here("smallRNA-SNPC13-SNPC1348_vs_N248-DESEq2-DiagnosticPlots.pdf"), height = 4, width = 5)
+
+ggplot(as.data.frame(Contrast$pvalue), aes(`Contrast$pvalue`)) + 
+  geom_histogram(binwidth = 0.05, center = 0.025) + 
+  scale_y_continuous(limits = c(0, 15000), expand = c(0, 0)) + 
+  scale_x_continuous(breaks = seq(0, 1, 0.25), limits = c(0.00, 1.00), expand = c(0, 0)) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(x = "P-value", y = "Count")
+
+MAPlot <- plotMA(Contrast, ylim = c(-1, 1))
+
+DispersionPlot <- plotDispEsts(dds, ylim = c(1e-6, 1e2))
+
+dev.off()
+
+## differential expression results
+write.table(SNPC1348_vs_N248, 
+            here("smallRNA-SNPC13-SNPC1348_vs_N248-DE.txt"), 
+            row.names = FALSE, 
+            quote = FALSE, 
+            sep = "\t")
+```
+
+
+*Differential expression: SNPC-1.3(2xTBS) 72h versus N2 72h.*
+```{r TBS72_vs_N272, message = FALSE, warning = FALSE}
+# contrast for SNPC-1.3(2xTBS) 72h vs N2 72h
+Contrast <- results(dds, 
+                    contrast = c("GenotypeAge", "SNPC13_2xTBS_72", "N2_72"), 
+                    cooksCutoff = TRUE, 
+                    independentFiltering = FALSE)
+
+TBS72_vs_N272 <- as.data.frame(Contrast)
+TBS72_vs_N272$gene_ID <- rownames(TBS72_vs_N272)
+TBS72_vs_N272 <- merge(annotation, TBS72_vs_N272, by.x = "gene_ID", by.y = "gene_ID")
+TBS72_vs_N272$FC <- ifelse(TBS72_vs_N272$log2FoldChange < 0, 2^abs(TBS72_vs_N272$log2FoldChange) * -1, 2^TBS72_vs_N272$log2FoldChange)
+names(TBS72_vs_N272)[names(TBS72_vs_N272) == "padj"] <- "padj_BH"
+
+
+# write files
+## diagnostic plots
+pdf(here("smallRNA-SNPC13-TBS72_vs_N272-DESEq2-DiagnosticPlots.pdf"), height = 4, width = 5)
+
+ggplot(as.data.frame(Contrast$pvalue), aes(`Contrast$pvalue`)) + 
+  geom_histogram(binwidth = 0.05, center = 0.025) + 
+  scale_y_continuous(limits = c(0, 15000), expand = c(0, 0)) + 
+  scale_x_continuous(breaks = seq(0, 1, 0.25), limits = c(0.00, 1.00), expand = c(0, 0)) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(x = "P-value", y = "Count")
+
+MAPlot <- plotMA(Contrast, ylim = c(-1, 1))
+
+DispersionPlot <- plotDispEsts(dds, ylim = c(1e-6, 1e2))
+
+dev.off()
+
+## differential expression results
+write.table(TBS72_vs_N272, 
+            here("smallRNA-SNPC13-TBS72_vs_N272-DE.txt"), 
+            row.names = FALSE, 
+            quote = FALSE, 
+            sep = "\t")
+```

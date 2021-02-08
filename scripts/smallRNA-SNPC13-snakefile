@@ -1,0 +1,334 @@
+# vim: set ft=python:
+
+shell.prefix("""
+set -o pipefail
+set -e
+""")
+
+"""
+Author: Margaret R. Starostik
+Aim: Snakemake workflow for smallRNA-seq analysis used in SNPC-1.3 project
+Date: January 20, 2020
+"""
+
+##------------------------------------------------------------------------------
+
+import glob
+from os.path import join, basename, dirname
+from snakemake.utils import R
+
+BOWTIE_VERSION = "1.1.1"
+FASTQC_VERSION = "0.11.7"
+JAVA_VERSION = "1.8.0_181"
+SAMTOOLS_VERSION = "1.9"
+SUBREAD_VERSION = "1.6.3"
+
+PYTHON = "/path/to/etc/profile.d/conda.sh"
+ENV = "python27"
+
+##------------------------------------------------------------------------------
+
+"""
+
+-REFERENCES (/path/to/references/)
+    --WBCEL235_ENSEMBL97.269
+        ---BOWTIE
+
+-TOOLS (/path/to/tools/)
+    --TRIMMOMATIC-0.39
+        ---ADAPTERS
+        ---trimmomatic-0.39.jar
+        
+-BASE (/path/to/base/)
+    --project (piRNA-SNPC13/smallRNA)
+        ---logs
+        ---RawData
+        ---ProcessedData
+            ----00_Renamed
+            ----01_Trimmed
+                -----NoReadLengthFilter
+                -----ReadLength1530
+            ----02_Aligned
+            ----03_Quantified
+        ---QualityControl
+            ----FastQC
+                -----Processed
+                    ------ReadLength1530
+                -----Unprocessed
+
+"""
+
+# work directory
+WORK_DIR = "/path/to/work"
+PROJECT = "piRNA-SNPC13/smallRNA"
+PROJECT_DIR = "{0}/{1}".format(WORK_DIR, PROJECT)
+
+# project directories
+FASTQ_DIR = PROJECT_DIR + "/ProcessedData/00_Renamed"
+
+UFASTQC_DIR = PROJECT_DIR + "/QualityControl/Unprocessed"
+PFASTQC_DIR = PROJECT_DIR + "/QualityControl/Processed/ReadLength1530"
+
+TRIM_DIR = PROJECT_DIR + "/ProcessedData/01_Trimmed/NoReadLengthFilter"
+
+FILTER_DIR = PROJECT_DIR + "/ProcessedData/01_Trimmed/ReadLength1530"
+
+ALIGN_DIR = PROJECT_DIR + "/ProcessedData/02_Aligned"
+
+QUANT_DIR = PROJECT_DIR + "/ProcessedData/03_Quantified"
+
+##------------------------------------------------------------------------------
+## GLOBALS: DECLARE VARIABLES USED IN SUBSEQUENT STEPS
+
+# Data directory
+DATA_DIR = "/path/to/references"
+
+# base path to references
+REF_PATH = DATA_DIR + "/REFERENCES/Celegans/WBcel235_Ensembl97.269"
+
+# full path to uncompressed FASTA file with all chromosome sequences (DNA primary assembly)
+GENOME_FILENAME = "ORIGINAL/Caenorhabditis_elegans.WBcel235.dna.toplevel"
+GENOME = "{0}/{1}.fa".format(REF_PATH, GENOME_FILENAME)
+
+
+# full path to uncompressed GTF file with all gene annotations
+GTF_FILENAME = "ORIGINAL/Caenorhabditis_elegans.WBcel235.97"
+GTF = "{0}/{1}.gtf".format(REF_PATH, GTF_FILENAME)
+
+# full path to bowtie index
+BOWTIE_IDX = "BOWTIE"
+BOWTIE_IDX_DIR = "{0}/{1}".format(REF_PATH, BOWTIE_IDX)
+
+# tool directory
+TOOL_DIR = "/path/to/tools"
+
+# full path to uncompressed FASTA file containing SE Illumina adapters
+ADAPTERS_PATH = TOOL_DIR + "/trimmomatic-0.39/adapters"
+ADAPTERS_FILENAME = "TruSeq3-SE"
+ADAPTERS = "{0}/{1}.fa".format(ADAPTERS_PATH, ADAPTERS_FILENAME)
+
+##------------------------------------------------------------------------------
+## SAMPLES TO BE PROCESSED
+
+# all samples
+SAMPLES = [basename(fname).split('.')[0] for fname in glob.glob(join(FASTQ_DIR, "*.fastq.gz"))]
+SAMPLES = list(set(SAMPLES))
+
+# trimmomatic
+RTRIM = expand(TRIM_DIR + "/trimmed_{sample}.fastq.gz", sample = SAMPLES)
+
+# BBMAP
+RFILTER = expand(FILTER_DIR + "/filtered1530_{sample}.fastq.gz", sample = SAMPLES)
+
+# FastQC
+UFASTQC = expand(UFASTQC_DIR + "/{sample}_fastqc.zip", sample = SAMPLES)
+PFASTQC = expand(PFASTQC_DIR + "/filtered1530_{sample}_fastqc.zip", sample = SAMPLES)
+
+# bowtie
+BOWTIE_EBWT = BOWTIE_IDX_DIR + "/WBcel235.1.ebwt"
+BOWTIE_SAM = expand(ALIGN_DIR + "/{sample}.sam", sample = SAMPLES)
+
+
+# subread
+FEATURES_QUANT = QUANT_DIR + "/smallRNA-SNPC13-SubReadRawCounts.txt"
+
+##------------------------------------------------------------------------------
+## LOCAL RULES: RULES THAT CAN BE RUN LOCALLY
+
+localrules: all
+
+"""
+RULE ALL: SNAKEMAKE ACCEPTS RULE NAMES AS TARGETS IF THE REFERRED RULE DOES NOT
+HAVE WILDCARDS; IF NO TARGET IS GIVEN AT COMMAND LINE AT THE TOP OF THE
+WORKFLOW, SNAKEMAKE WILL DEFINE THE FIRST FILE OF THE SNAKEFILE AS THE TARGET.
+THEREFORE, IT IS BEST PRACTICE TO HAVE A "RULE ALL" AT THE TOP OF THE
+WORKFLOW WHICH HAS ALL THE DESIRED TARGET FILES OF THE PIPELINE AS INPUT FILES.
+OBTAIN THE DESIRED TARGET FILES FROM "SAMPLES TO BE PROCESSED".
+"""
+
+rule all:
+    input:
+        UFASTQC,
+        RTRIM,
+        RFILTER,
+        PFASTQC,
+        BOWTIE_EBWT,
+        BOWTIE_SAM,
+        FEATURES_QUANT
+        
+##------------------------------------------------------------------------------
+rule ufastqc:
+    """
+    Quality control on raw fastq files.
+    """
+    input:
+        R = FASTQ_DIR + "/{sample}.fastq.gz"
+    output:
+        ufastqc = UFASTQC_DIR + "/{sample}_fastqc.zip"
+    threads: 4
+    params:
+        mem = "2G",
+        time = "30:00",
+        partition ="express"
+    shell:
+        """
+        module load fastqc/{FASTQC_VERSION} || exit 1
+        fastqc \
+        -o QualityControl/Unprocessed \
+        {input.R}
+        """
+        
+##------------------------------------------------------------------------------
+rule trimmomatic:
+    """
+    Illumina adapter clipping followed by quality trimming. 
+    Adapter sequences provided in TruSeq3-SE.fa (trimmomatic-0.39) were used.
+    Parameters set such that Trimmomatic will look for seed matches 
+    allowing maximally 2 mismatches. Seeds will be extended and clipped if a 
+    score of 10 is reached (SE). The read is scanned with a 4-base wide sliding 
+    window and cuts when the average quality per read drops below 25.
+    """
+    input:
+        R = FASTQ_DIR + "/{sample}.fastq.gz"
+    output:
+        Rtrim = TRIM_DIR + "/trimmed_{sample}.fastq.gz",
+    threads: 4
+    params:
+        mem = "15G",
+        time = "1:00:00",
+        partition = "express"
+    shell:
+        """
+        module load java/{JAVA_VERSION} || exit 1 
+        cd /path/to/trimmomatic-0.39
+        java -jar trimmomatic-0.39.jar SE \
+        -threads {threads} \
+        {input.R} \
+        {output.Rtrim} \
+        ILLUMINACLIP:{ADAPTERS}:2:30:10 \
+        SLIDINGWINDOW:4:25
+        """
+
+##------------------------------------------------------------------------------
+rule filter:
+    """
+    Keep trimmed reads that are 15-30 bp long.
+    """
+    input:
+        Rtrim = TRIM_DIR + "/trimmed_{sample}.fastq.gz"
+    output:
+        Rfilter = FILTER_DIR + "/filtered1530_{sample}.fastq.gz"
+    threads: 4
+    params:
+        mem = "10G",
+        time = "2:00:00",
+        partition = "shared"
+    shell:
+        """
+        module load bbmap/{BBMAP_VERSION} || exit 1 
+        reformat.sh \
+        in={input.Rtrim} \
+        out={output.Rfilter} \
+        minlength=15 \
+        maxlength=30
+        
+##------------------------------------------------------------------------------
+rule pfastqc:
+    """
+    Quality control on filtered fastq files.
+    """
+    input:
+        Rfilter = FILTER_DIR + "/filtered1530_{sample}.fastq.gz"
+    output:
+        Rfastqc = PFASTQC_DIR + "/filtered1530_{sample}_fastqc.zip"
+    threads: 4
+    params:
+        mem = "2G",
+        time = "30:00",
+        partition ="express"
+    shell:
+        """
+        module load fastqc/{FASTQC_VERSION} || exit 1
+        fastqc \
+        -o QualityControl/Processed/ReadLength1530 \
+        {input.Rfilter}
+        """
+        
+##------------------------------------------------------------------------------
+rule bowtie_index:
+    """
+    Generate BOWTIE genome index required for subsequent alignment of reads to 
+    the reference genome.
+    """
+    input:
+        genome = GENOME,
+        gtf = GTF
+    output:
+        bowtie_ebwt = BOWTIE_IDX_DIR + "/WBcel235.1.ebwt"
+    threads: 8
+    params:
+        mem = "10G",
+        time = "2:00:00",
+        partition = "shared"
+    shell:
+        """
+        bowtie_dir=$(dirname {output.bowtie_ebwt})
+        bowtie_dir+="/WBcel235"
+        module load bowtie/{BOWTIE_VERSION} || exit 1
+        bowtie-build \
+        -f {input.genome} \
+        $bowtie_dir
+        """
+##------------------------------------------------------------------------------
+rule bowtie:
+    """
+    Map reads to the reference genome.
+    """
+    input:
+        Rfilter = FILTER_DIR + "/filtered1530_{sample}.fastq.gz",
+        bowtie_ebwt = BOWTIE_IDX_DIR + "/WBcel235.1.ebwt"
+    output:
+        bowtie_sam = ALIGN_DIR + "/{sample}.sam"
+    log: "/path/to/piRNA-SNPC13/smallRNA/ProcessedData/02_Aligned/{sample}.log"
+    threads: 8
+    params:
+        mem = "10G",
+        time = "2:00:00",
+        partition = "shared"
+    shell:
+        """
+        module load bowtie/{BOWTIE_VERSION} || exit 1
+        gunzip -dc {input.Rfilter} | bowtie \
+        -p {threads} \
+        -v 0 \
+        -k 5 \
+        -M 1 \
+        --best \
+        --strata \
+        --tryhard \
+        --chunkmbs 512 \
+        -S /path/to/WBcel235_Ensembl97.269/BOWTIE/WBcel235 \
+        - {output.bowtie_sam} \
+        2> {log}
+ 	"""
+ 	
+##------------------------------------------------------------------------------
+rule featurecounts:
+    """
+    Quantify reads.
+    """
+    input:
+        bowtie_sam = expand(ALIGN_DIR + "/{sample}.sam", sample = SAMPLES),
+        gtf = GTF
+    output:
+        features_quant = QUANT_DIR + "/smallRNA-SNPC13-SubReadRawCounts.txt"
+    threads: 8
+    params:
+        mem = "5G",
+        time = "1:00:00",
+        partition = "shared"
+    shell:
+        """
+        module load subread/{SUBREAD_VERSION} || exit 1
+        featureCounts -t exon -g gene_id -s 1 -a -M -O {input.gtf} -o {output.features_quant} {input.bowtie_sam}
+        """
