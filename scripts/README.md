@@ -1,5 +1,4 @@
 # Contents
-___
 `ChIP-TRA1-snakefile` - Snakemake-based workflow to identify TRA-1 binding sites from raw ChIP-seq files.  
 
 `smallRNA-SNPC13-DE.Rmd` - differential expression analysis using as input the gene expression matrix generated from the ***small-RNA-SNPC13-snakefile*** workflow.  
@@ -14,7 +13,6 @@ ___
 <br>
 
 ## Resources
-___
 The small RNA-seq and ChIP-seq data have been deposited in NCBI under GEO accession number: GSE152831.
 
 [bbmap 38.23](http://jgi.doe.gov/data-and-tools/bb-tools/)  
@@ -26,7 +24,6 @@ The small RNA-seq and ChIP-seq data have been deposited in NCBI under GEO access
 <br>
 
 ## References
-___
 [Bailey TL, Boden M, Buske FA, Frith M, Grant CE, Clementi L, Ren J, Li WW, Noble WS. 2009. MEME SUITE:tools for motif discovery and searching.Nucleic Acids Research37:W202–W208.](https://doi.org/10.1093/nar/gkp335)
 
 [Bolger AM, Lohse M, Usadel B. 2014. Trimmomatic: a flexible trimmer for illumina sequence data.Bioinformatics30:2114–2120.](https://doi.org/10.1093/bioinformatics/btu170)
