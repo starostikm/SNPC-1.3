@@ -1,7 +1,7 @@
 
 # Code associated with "SNPC-1.3 is a sex-specific transcription factor that drives male piRNA expression in _C. elegans_"
 
-<font size="6">*https://www.biorxiv.org/content/10.1101/2020.08.06.240200v1</font>
+<font size="6">https://www.biorxiv.org/content/10.1101/2020.08.06.240200v1</font>
 
 <font size="6">**Authors:** Charlotte P. Choi, Rebecca J. Tay, Margaret R. Starostik, Suhua Feng, James J. Moresco, Brooke E. Montgomery, Emily Xu, Maya A. Hammonds, Michael C. Schatz, Taiowa A. Montgomery, John R. Yates III, Steven E. Jacobsen, John K. Kim.</font>
 
