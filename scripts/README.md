@@ -1,33 +1,31 @@
-## Contents
+# Contents
 ___
 `ChIP-TRA1-snakefile` - Snakemake-based workflow to identify TRA-1 binding sites from raw ChIP-seq files.  
 
-`smallRNA-SNPC13-DE.Rmd` - differential expression analysis using as input the gene expression matrix generated from the *small-RNA-SNPC13-snakefile* workflow.  
+`smallRNA-SNPC13-DE.Rmd` - differential expression analysis using as input the gene expression matrix generated from the ***small-RNA-SNPC13-snakefile*** workflow.  
 
-`smallRNA-SNPC13-snakefile` - Snakemake-based workflow to generate a gene expression matrix from raw small RNA-seq fastq data. Execute using *submit-smallRNA-SNPC13-snakefile.sh*.  
+`smallRNA-SNPC13-snakefile` - Snakemake-based workflow to generate a gene expression matrix from raw small RNA-seq fastq data. Execute using ***submit-smallRNA-SNPC13-snakefile.sh***.  
 
-`run-ChIP-TRA1-snakefile.sh` - batch input file to submit *ChIP-TRA1-snakefile* as a batch job.  
+`run-ChIP-TRA1-snakefile.sh` - batch input file to submit ***ChIP-TRA1-snakefile*** as a batch job.  
 
-`run-smallRNA-SNPC13-snakefile.sh` - batch input file to submit *smallRNA-SNPC13-snakefile* as a batch job.  
+`run-smallRNA-SNPC13-snakefile.sh` - batch input file to submit ***smallRNA-SNPC13-snakefile*** as a batch job.  
 
 
 <br>
-<br>
 
-### Resources
+## Resources
 ___
 The small RNA-seq and ChIP-seq data have been deposited in NCBI under GEO accession number: GSE152831.
 
-bbmap 38.23 (http://jgi.doe.gov/data-and-tools/bb-tools/)  
-ENCODE ce11 blacklist (https://github.com/Boyle-Lab/Blacklist/)  
-FastQC 0.11.7 (http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)  
-Picard 2.22.1 (http://broadinstitute.github.io/picard/)  
-Trim Galore! 0.5.0 (http://www.bioinformatics.babraham.ac.uk/projects/trim_galore/)  
+[bbmap 38.23](http://jgi.doe.gov/data-and-tools/bb-tools/)  
+[ENCODE ce11 blacklist](https://github.com/Boyle-Lab/Blacklist/)  
+[FastQC 0.11.7](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)  
+[Picard 2.22.1](http://broadinstitute.github.io/picard/)  
+[Trim Galore! 0.5.0](http://www.bioinformatics.babraham.ac.uk/projects/trim_galore/)  
 
 <br>
-<br>
 
-### References
+## References
 ___
 [Bailey TL, Boden M, Buske FA, Frith M, Grant CE, Clementi L, Ren J, Li WW, Noble WS. 2009. MEME SUITE:tools for motif discovery and searching.Nucleic Acids Research37:W202–W208.](https://doi.org/10.1093/nar/gkp335)
 
