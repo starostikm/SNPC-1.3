@@ -1,0 +1,336 @@
+# vim: set ft=python:
+
+shell.prefix("""
+set -o pipefail
+set -e
+""")
+
+"""
+Author: Margaret R. Starostik
+Aim: Snakemake workflow for TRA-1 ChIP-seq analysis
+Date: February 18, 2020
+"""
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+## MODULES
+
+import glob
+from os.path import join, basename, dirname
+
+BEDTOOLS_VERSION = "2.27.0"
+BOWTIE2_VERSION = "2.3.4.2"
+FASTQC_VERSION = "0.11.7"
+JAVA_VERSION = "1.8.0_181"
+MACS2_VERSION = "2.1.2"
+R_VERSION = "3.5.1"
+SAMTOOLS_VERSION = "1.9"
+TRIMGALORE_VERSION = "0.5.0"
+
+PYTHON = "/path/to/etc/profile.d/conda.sh"
+ENV = "python27"
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+## DIRECTORIES
+
+"""
+-BASE (/path/to/base)
+    -PROJECT (TRA-1)
+        --RawData
+            ---FASTQ
+        --ProcessedData
+            ---00_RENAMED
+            ---01_TRIMMED
+            ---02_ALIGNED
+            ---03_DEDUPED
+                 ----NoModel250
+                ----NoModel550
+        --CleanData
+        --QualityControl
+            ---CrossCorrelation
+            ---FastQC
+                ----Unprocessed
+                ----Processed
+            ---FileCheck
+            ---Fingerprint
+            ---GenomeSize
+            ---PairwiseCorrelations
+            ---Pileup
+        --logs   
+"""
+
+# base directory
+BASE_DIR = "/path/to/base"
+PROJECT = "TRA-1"
+PROJECT_DIR = "{0}/{1}".format(BASE_DIR, PROJECT)
+
+# project directories
+FASTQ_DIR = PROJECT_DIR + "/ProcessedData/00_RENAMED"
+
+UFASTQC_DIR = PROJECT_DIR + "/QualityControl/FastQC/Unprocessed"
+PFASTQC_DIR = PROJECT_DIR + "/QualityControl/FastQC/Processed"
+
+TRIM_DIR = PROJECT_DIR + "/ProcessedData/01_TRIMMED"
+ALIGN_DIR = PROJECT_DIR + "/ProcessedData/02_ALIGNED"
+FILTER_DIR = PROJECT_DIR + "/ProcessedData/03_FILTERED"
+
+PEAKS_DIR = PROJECT_DIR + "/ProcessedData/04_PEAKS"
+METHOD01_DIR = PEAKS_DIR + "/Method01"
+
+CORR_DIR = PROJECT_DIR + "/QualityControl/Correlation"
+FINGERPRINT_DIR = PROJECT_DIR + "/QualityControl/Fingerprint"
+PILEUP_DIR = PROJECT_DIR + "/QualityControl/Pileup"
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+## GLOBALS: DECLARE VARIABLES USED IN SUBSEQUENT STEPS
+
+# base path to references
+REF_BASEPATH = "/home-3/mstaros1@jhu.edu/references/ensembl97.269_WBcel235"
+
+# full path to Bowtie2 indices
+REF_SOURCE = "/WBcel235_ensembl97.269/BOWTIE2/WBcel235"
+
+# full path to black list
+BLACKLIST_NAME = "ce11-blacklist.v2"
+BLACKLIST = "{0}/{1}.bed".format(REF_BASEPATH, BLACKLIST_NAME)
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+## SAMPLES TO BE PROCESSED
+
+# All samples
+CONTROLS= ["ChIP2020-001-N2-72hGravid-WW", "ChIP2020-002-TRA13xFLAG-72hGravid-WW", "ChIP2020-003-TRA13xFLAG_1xTBS-72hGravid-WW", "ChIP2020-004-TRA13xFLAG_2xTBS-72hGravid-WW", "ChIP2020-005-TRA13xFLAG_3xTBS-72hGravid-WW", \
+"ChIP2020-011-N2-72hGravid-WW", "ChIP2020-012-TRA13xFLAG-72hGravid-WW", "ChIP2020-013-TRA13xFLAG_1xTBS-72hGravid-WW", "ChIP2020-014-TRA13xFLAG_2xTBS-72hGravid-WW", "ChIP2020-015-TRA13xFLAG_3xTBS-72hGravid-WW"] 
+CASES = ["ChIP2020-006-N2-72hGravid-WW", "ChIP2020-007-TRA13xFLAG-72hGravid-WW", "ChIP2020-008-TRA13xFLAG_1xTBS-72hGravid-WW", "ChIP2020-009-TRA13xFLAG_2xTBS-72hGravid-WW", "ChIP2020-010-TRA13xFLAG_3xTBS-72hGravid-WW", \
+"ChIP2020-016-N2-72hGravid-WW", "ChIP2020-017-TRA13xFLAG-72hGravid-WW", "ChIP2020-018-TRA13xFLAG_1xTBS-72hGravid-WW", "ChIP2020-019-TRA13xFLAG_2xTBS-72hGravid-WW", "ChIP2020-020-TRA13xFLAG_3xTBS-72hGravid-WW"] 
+
+SAMPLES = CONTROLS + CASES
+
+IP_BAM = expand(FILTER_DIR + "/dedup_{cases}.bam", zip, cases = CASES, controls = CONTROLS)
+INPUT_BAM = expand(FILTER_DIR + "/dedup_{controls}.bam", zip, cases = CASES, controls = CONTROLS)
+
+# CROSS CORRELATION
+CROSSCORR_SUMMARY = expand(CROSSCORR_DIR + "/{sample}_summary.txt", sample = SAMPLES)
+CROSSCORR_PDF = expand(CROSSCORR_DIR + "/{sample}_CrossCorr.pdf", sample = SAMPLES)
+
+# FINGERPRINT
+FF_PLOT = expand(FINGERPRINT_DIR + "/{cases}_{contols}_FingerPrintPlot.pdf", zip, cases = CASES, contols = CONTROLS)
+
+# PILEUP
+PILEUP = expand(PILEUP_DIR + "/{cases}_vs_{contols}_CPMratio_Pileup.bw", zip, cases = CASES, contols = CONTROLS)
+LOG2_PILEUP = expand(PILEUP_DIR + "/{cases}_vs_{contols}_CPMlog2ratio_Pileup.bw", zip, cases = CASES, contols = CONTROLS)
+BIGWIG_SUMMARY = PILEUP_DIR + "/CPMratio_bigWigSummary.npz"
+
+
+PEARSON_TXT = CORR_DIR + "/SampleCorrelation_CPMratio.txt"
+PEARSON_PDF = CORR_DIR + "/SampleCorrelation_CPMratio.pdf" 
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+## LOCAL RULES: RULES THAT CAN BE RUN LOCALLY
+
+localrules: all
+
+"""
+RULE ALL: SNAKEMAKE ACCEPTS RULE NAMES AS TARGETS IF THE REFERRED RULE DOES NOT HAVE WILDCARDS; IF NO TARGET IS GIVEN AT COMMAND LINE AT THE TOP OF THE \
+WORKFLOW, SNAKEMAKE WILL DEFINE THE FIRST FILE OF THE SNAKEFILE AS THE TARGET. THEREFORE, IT IS BEST PRACTICE TO HAVE A "RULE ALL" AT THE TOP OF THE \
+WORKFLOW WHICH HAS ALL THE DESIRED TARGET FILES OF THE PIPELINE AS INPUT FILES.OBTAIN THE DESIRED TARGET FILES FROM "SAMPLES TO BE PROCESSED".
+"""
+
+rule all:
+    input:
+        FF_PLOT,
+        PILEUP,
+        LOG2_PILEUP,
+        BIGWIG_SUMMARY,
+        PEARSON_TXT,
+        PEARSON_PDF
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------------------
+rule crosscorr:
+    """
+    Cross-correlation analysis is done on filtered, but not de-duped, and sub-sampled BAM files. The read trimming requirements are 50bp.
+    """
+    input:
+        dbam = DEDUP_DIR + "/deduped_{sample}.bam",
+        idbam = DEDUP_DIR + "/deduped_{sample}.bam"
+    output:
+        crosscorr_summary = CROSSCORR_DIR + "/{sample}_summary.txt",
+        crosscorr_pdf = CROSSCORR_DIR + "/{sample}_CrossCorr.pdf"
+    threads: 8
+    params:
+        partition = "shared",
+        mem = "5G",
+        time = "10:00:00"
+    shell:
+        """
+        module load R/{R_VERSION} || exit 1
+        module load samtools/{SAMTOOLS_VERSION} || exit 1
+        Rscript /home-3/mstaros1@jhu.edu/tools/run_spp.R \
+        -c={input.dbam} \
+        -out={output.crosscorr_summary} \
+        -savp={output.crosscorr_pdf}
+        """
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+rule fingerprint:
+    """
+    Fingerprints.Takes long time.
+    """
+    input:
+        ip_bam = FILTER_DIR + "/dedup_{cases}.bam",,
+        input_bam = FILTER_DIR + "/dedup_{controls}.bam",
+        blacklist = BLACKLIST
+    output:
+        ff_plot = FINGERPRINT_DIR + "/{cases}_{contols}_FingerPrintPlot.pdf"
+    threads: 8
+    params:
+        partition = "shared",
+        mem = "30G",
+        time = "48:00:00"
+    shell:
+        """
+        source {PYTHON}
+        conda activate {ENV}
+        plotFingerprint \
+        --bamfiles {input.ip_bam} {input.input_bam} \
+        --plotFile {output.ff_plot} \
+        --labels IP Input \
+        --blackListFileName {input.blacklist}
+        """
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+rule pileup:
+    """
+    A bigWig file is generated based on two BAM files that are compared to each other while normalized for sequencing depth. \
+    Compares two BAM files based on the number of mapped reads by partitioning the genome into equal size bins. The number of reads falling into each bin is \
+    counted for each file, and a summary value is reported as the ratio of the number of reads per bin. The number of reads in each BAM file is normalized \
+    using CPM. The effective genome size was estimated from the table provided by deeptools (https://deeptools.readthedocs.io/en/latest/content/feature/effectiveGenomeSize.html) \
+    for read length 50 and reference genome WBcel235. 728500, the number of bases in the blacklist file, was subtracted from the listed value 95159452 to obtain \
+    an effective genome size of 94430952.
+    """ 
+    input:
+        ip_bam = FILTER_DIR + "/dedup_{cases}.bam",
+        ip_bai = FILTER_DIR + "/dedup_{cases}.bam.bai",
+        input_bam = FILTER_DIR + "/dedup_{contols}.bam",
+        input_bai = FILTER_DIR + "/dedup_{contols}.bam.bai",
+        blacklist = BLACKLIST
+    output:
+        pileup = PILEUP_DIR + "/{cases}_vs_{contols}_CPMratio_Pileup.bw"
+    threads: 8
+    params:
+        partition = "shared",
+        mem = "5G",
+        time = "1:00:00"
+    shell:
+        """
+        source {PYTHON}
+        conda activate {ENV}
+        bamCompare \
+        --bamfile1 {input.ip_bam} \
+        --bamfile2 {input.input_bam} \
+        --outFileName {output.pileup} \
+        --scaleFactorsMethod None \
+        --effectiveGenomeSize 94430952 \
+        --normalizeUsing CPM \
+        --operation ratio \
+        --pseudocount 1 \
+        --binSize 50 \
+        --blackListFileName {input.blacklist} \
+        --ignoreForNormalization MtDNA \
+        --extendReads 200
+        """
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+rule log2pileup:
+    """
+    A bigWig file is generated based on two BAM files that are compared to each other while normalized for sequencing depth. \
+    Compares two BAM files based on the number of mapped reads by partitioning the genome into equal size bins. The number of reads falling into each bin is \
+    counted for each file, and a summary value is reported as the ratio of the number of reads per bin. The number of reads in each BAM file is normalized \
+    using CPM. The effective genome size was estimated from the table provided by deeptools (https://deeptools.readthedocs.io/en/latest/content/feature/effectiveGenomeSize.html) \
+    for read length 50 and reference genome WBcel235. 728500, the number of bases in the blacklist file, was subtracted from the listed value 95159452 to obtain \
+    an effective genome size of 94430952.
+    """ 
+    input:
+        ip_bam = FILTER_DIR + "/dedup_{cases}.bam",
+        ip_bai = FILTER_DIR + "/dedup_{cases}.bam.bai",
+        input_bam = FILTER_DIR + "/dedup_{contols}.bam",
+        input_bai = FILTER_DIR + "/dedup_{contols}.bam.bai",
+        blacklist = BLACKLIST
+    output:
+        log2_pileup = PILEUP_DIR + "/{cases}_vs_{contols}_CPMlog2ratio_Pileup.bw"
+    threads: 8
+    params:
+        partition = "shared",
+        mem = "5G",
+        time = "1:00:00"
+    shell:
+        """
+        source {PYTHON}
+        conda activate {ENV}
+        bamCompare \
+        --bamfile1 {input.ip_bam} \
+        --bamfile2 {input.input_bam} \
+        --outFileName {output.log2_pileup} \
+        --scaleFactorsMethod None \
+        --effectiveGenomeSize 94430952 \
+        --normalizeUsing CPM \
+        --operation log2 \
+        --pseudocount 1 \
+        --binSize 50 \
+        --blackListFileName {input.blacklist} \
+        --ignoreForNormalization MtDNA \
+        --extendReads 200
+        """
+
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------Y
+rule bigwig:
+    """
+    Compute average scrores for each of the files in every genomic region. The output is a compressed numpy array and can be used by other tools such as \
+    plotCorrelation or plotPCA.
+    """
+    input:
+        all_pileups = expand(PILEUP_DIR + "/{cases}_vs_{contols}_CPMratio_Pileup.bw", zip, cases = CASES, contols = CONTROLS),
+        blacklist = BLACKLIST
+    output:
+        bigwig_summary = PILEUP_DIR + "/CPMratio_bigWigSummary.npz"
+    threads: 8
+    params:
+        partition = "shared",
+        mem = "10G",
+        time = "2:00:00"
+    shell:
+        """
+        source {PYTHON}
+        conda activate {ENV}
+        multiBigwigSummary \
+        bins \
+        --bwfiles {input.all_pileups} \
+        --outFileName {output.bigwig_summary} \
+        --chromosomesToSkip MtDNA \
+        --blackListFileName {input.blacklist}
+        """
+        
+##-------------------------------------------------------------------------------------------------------------------------------------------------------------
+rule pearson_corr:
+    """
+    
+    """
+    input:
+        bigwig_summary = PILEUP_DIR + "/CPMratio_bigWigSummary.npz"
+    output:
+        pearson_txt = CORR_DIR + "/SampleCorrelation_CPMratio.txt",
+        pearson_pdf = CORR_DIR + "/SampleCorrelation_CPMratio.pdf"
+    threads: 8
+    params:
+        partition = "shared",
+        mem = "1G",
+        time = "1:00:00"
+    shell:
+        """
+        source {PYTHON}
+        conda activate {ENV}
+        plotCorrelation \
+        --corData {input.bigwig_summary} \
+        --corMethod pearson \
+        --whatToPlot scatterplot \
+        --plotFile {output.pearson_pdf} \
+        --outFileCorMatrix {output.pearson_txt} \
+        --labels N2
+        """
